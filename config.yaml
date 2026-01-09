@@ -1,0 +1,55 @@
+# AI-Based Peer Behavior Similarity Detector Configuration
+
+# Data Generation Parameters
+data_generation:
+  num_normal_students: 100
+  num_colluding_groups: 3
+  students_per_group: [4, 5, 3]  # Size of each colluding group
+  num_questions: 50
+  exam_duration_minutes: 120
+  seed: 42  # Reproducible random seed
+
+# Feature Engineering
+features:
+  behavioral:
+    - avg_time_per_question
+    - std_time_per_question
+    - answer_change_rate
+    - accuracy_rate
+    - late_submission_rate
+  
+  pattern_based:
+    - wrong_answer_vector
+    - timing_pattern_vector
+    - answer_sequence_similarity
+
+# Similarity Metrics
+similarity:
+  cosine_weight: 0.4
+  jaccard_weight: 0.6
+  min_similarity_threshold: 0.70  # Edge creation threshold
+  knn_k: 3  # Keep top-k strongest edges per node
+  edge_wrong_overlap_threshold: 0.60  # Require pairwise Jaccard >= threshold for edges
+  use_community_detection: true
+  dynamic_prune: true
+  
+# Collusion Detection
+detection:
+  suspicious_similarity_threshold: 0.78
+  min_group_size: 3
+  wrong_answer_overlap_threshold: 0.60
+  timing_correlation_threshold: 0.7
+
+# Visualization
+visualization:
+  graph_layout: spring  # Options: spring, circular, kamada_kawai
+  node_size: 500
+  suspicious_node_color: '#FF4444'
+  normal_node_color: '#4444FF'
+  edge_color_gradient: true
+  
+# Output Paths
+output:
+  reports_dir: outputs/reports
+  graphs_dir: outputs/graphs
+  data_dir: data
