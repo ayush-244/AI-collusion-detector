@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: ai-collusion-detector
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
