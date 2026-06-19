@@ -5,6 +5,8 @@ Creates graphs and visual reports for collusion detection results
 
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import networkx as nx
 from typing import List, Set, Dict
@@ -211,6 +213,249 @@ class CollusionVisualizer:
                        dpi=300, bbox_inches='tight')
         
         plt.close()
+
+    def plot_interactive_network(self,
+                                 graph: nx.Graph,
+                                 suspicious_groups: List[Set[str]],
+                                 student_features: pd.DataFrame = None) -> "go.Figure":
+        """
+        Create an interactive Plotly visualization of the similarity network.
+        Nodes represent students; red is suspicious, blue is normal.
+        """
+        import plotly.graph_objects as go
+        
+        # Flatten suspicious students
+        suspicious_students = set()
+        for group in suspicious_groups:
+            suspicious_students.update(group)
+            
+        # Get layout (spring layout is standard and clean)
+        pos = nx.spring_layout(graph, k=0.6, iterations=50, seed=42)
+        
+        degrees = dict(graph.degree())
+        
+        # Index student features by student_id if available
+        features_dict = {}
+        if student_features is not None and not student_features.empty:
+            for _, row in student_features.iterrows():
+                features_dict[row['student_id']] = row
+                
+        edge_x = []
+        edge_y = []
+        
+        # We will create centers for hover details on edges
+        edge_centers_x = []
+        edge_centers_y = []
+        edge_hover_text = []
+        
+        for u, v in graph.edges():
+            x0, y0 = pos[u]
+            x1, y1 = pos[v]
+            edge_x.extend([x0, x1, None])
+            edge_y.extend([y0, y1, None])
+            
+            # Midpoint for hover details
+            weight = graph[u][v]['weight']
+            edge_centers_x.append((x0 + x1) / 2)
+            edge_centers_y.append((y0 + y1) / 2)
+            edge_hover_text.append(f"Match: {u} & {v}<br>Similarity Score: {weight:.3f}")
+
+        # Edge line trace
+        edge_trace = go.Scatter(
+            x=edge_x, y=edge_y,
+            line=dict(width=1.5, color='#CBD5E1'),
+            hoverinfo='none',
+            mode='lines',
+            name='Connections'
+        )
+        
+        # Invisible markers at edge midpoints for hover interaction
+        edge_hover_trace = go.Scatter(
+            x=edge_centers_x, y=edge_centers_y,
+            mode='markers',
+            marker=dict(size=4, color='rgba(0,0,0,0)'),
+            text=edge_hover_text,
+            hoverinfo='text',
+            name='Connection Details',
+            showlegend=False
+        )
+
+        # Node properties
+        node_x = []
+        node_y = []
+        node_text = []
+        node_color = []
+        node_size = []
+        
+        for node in graph.nodes():
+            x, y = pos[node]
+            node_x.append(x)
+            node_y.append(y)
+            
+            is_susp = node in suspicious_students
+            status_str = "Suspicious" if is_susp else "Normal"
+            color = "#EF4444" if is_susp else "#3B82F6"
+            size = degrees[node] * 4 + 18
+            
+            # Rich hover HTML card
+            h_text = f"<b>Student ID:</b> {node}<br><b>Status:</b> {status_str}<br><b>Connections:</b> {degrees[node]}"
+            if node in features_dict:
+                row = features_dict[node]
+                if 'accuracy_rate' in row:
+                    acc = row['accuracy_rate']
+                    h_text += f"<br><b>Accuracy:</b> {acc*100:.1f}%" if acc <= 1.0 else f"<br><b>Accuracy:</b> {acc:.2f} (std)"
+                if 'avg_time_per_question' in row:
+                    t_spent = row['avg_time_per_question']
+                    h_text += f"<br><b>Avg Time:</b> {t_spent:.1f}s"
+                if 'answer_change_rate' in row:
+                    chg = row['answer_change_rate']
+                    h_text += f"<br><b>Answer Changes:</b> {chg*100:.1f}%" if chg <= 1.0 else f"<br><b>Answer Changes:</b> {chg:.2f} (std)"
+            
+            node_text.append(h_text)
+            node_color.append(color)
+            node_size.append(size)
+            
+        node_trace = go.Scatter(
+            x=node_x, y=node_y,
+            mode='markers+text',
+            text=[str(n) for n in graph.nodes()],
+            textposition="top center",
+            hoverinfo='text',
+            hovertext=node_text,
+            marker=dict(
+                showscale=False,
+                color=node_color,
+                size=node_size,
+                line=dict(width=1.5, color='#FFFFFF')
+            ),
+            name='Students'
+        )
+        
+        # Legend proxies
+        normal_legend = go.Scatter(
+            x=[None], y=[None], mode='markers',
+            marker=dict(size=12, color='#3B82F6'),
+            name='Normal Students'
+        )
+        susp_legend = go.Scatter(
+            x=[None], y=[None], mode='markers',
+            marker=dict(size=12, color='#EF4444'),
+            name='Suspicious Students'
+        )
+        
+        fig = go.Figure(data=[edge_trace, edge_hover_trace, node_trace, normal_legend, susp_legend],
+                        layout=go.Layout(
+                            title=dict(text='<b>Student Similarity Network Map</b>', font=dict(size=16)),
+                            showlegend=True,
+                            hovermode='closest',
+                            margin=dict(b=20, l=5, r=5, t=40),
+                            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                            plot_bgcolor='rgba(255, 255, 255, 0.95)',
+                            paper_bgcolor='rgba(0,0,0,0)',
+                            legend=dict(x=0.85, y=0.95, bgcolor='rgba(255,255,255,0.7)', bordercolor='#E2E8F0', borderwidth=1)
+                        ))
+                        
+        return fig
+
+    def plot_interactive_heatmap(self, similarity_matrix: pd.DataFrame) -> "go.Figure":
+        """
+        Create an interactive Plotly heatmap of pairwise similarities
+        """
+        import plotly.graph_objects as go
+        
+        student_ids = list(similarity_matrix.index)
+        matrix_values = similarity_matrix.values
+        
+        hover_text = []
+        for i in range(len(student_ids)):
+            row_text = []
+            for j in range(len(student_ids)):
+                s1 = student_ids[i]
+                s2 = student_ids[j]
+                val = matrix_values[i, j]
+                row_text.append(f"Student A: {s1}<br>Student B: {s2}<br>Similarity: {val:.3f}")
+            hover_text.append(row_text)
+            
+        fig = go.Figure(data=go.Heatmap(
+            z=matrix_values,
+            x=student_ids,
+            y=student_ids,
+            text=hover_text,
+            hoverinfo='text',
+            colorscale='YlOrRd',
+            zmin=0,
+            zmax=1,
+            colorbar=dict(title='Similarity')
+        ))
+        
+        fig.update_layout(
+            title=dict(text='<b>Pairwise Student Similarity Heatmap</b>', font=dict(size=16)),
+            xaxis=dict(title='Student ID', tickangle=45),
+            yaxis=dict(title='Student ID'),
+            margin=dict(b=40, l=40, r=20, t=50),
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
+        
+        return fig
+
+    def plot_interactive_scatter(self, df_pairs: pd.DataFrame) -> "go.Figure":
+        """
+        Create an interactive Plotly scatter plot for behavior vs wrong answer similarity
+        """
+        import plotly.express as px
+        import plotly.graph_objects as go
+        
+        color_map = {'Suspicious': '#EF4444', 'Normal': '#94A3B8'}
+        
+        fig = px.scatter(
+            df_pairs,
+            x='Behavior Similarity',
+            y='Shared Wrong Answers',
+            color='Group',
+            color_discrete_map=color_map,
+            hover_data={
+                'Behavior Similarity': ':.3f',
+                'Shared Wrong Answers': ':.3f',
+                'Overall Match Score': ':.3f',
+                'Group': True
+            },
+            title="<b>Cheating Analysis (Wrong Answers vs Behavioral Speed)</b>"
+        )
+        
+        # High-suspicion zone boundary rectangle
+        fig.add_shape(
+            type="rect",
+            x0=0.6, y0=0.4, x1=1.0, y1=1.0,
+            line=dict(color="#EF4444", width=2, dash="dash"),
+            fillcolor="rgba(239, 68, 68, 0.05)",
+            layer="below"
+        )
+        
+        fig.add_annotation(
+            x=0.8, y=0.9,
+            text="High Suspicion Zone",
+            showarrow=False,
+            font=dict(color="#EF4444", size=12, family="Arial, sans-serif"),
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="#EF4444",
+            borderwidth=1,
+            borderpad=4
+        )
+        
+        fig.update_traces(marker=dict(size=8, opacity=0.75, line=dict(width=0.5, color='#FFFFFF')))
+        
+        fig.update_layout(
+            xaxis_title="Behavioral Metric Similarity (Speed, Timing)",
+            yaxis_title="Shared Wrong Answers (Jaccard Index)",
+            plot_bgcolor='rgba(248, 250, 252, 0.95)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            margin=dict(b=40, l=40, r=20, t=50),
+            legend=dict(title="Student Pairs", bgcolor='rgba(255,255,255,0.7)', bordercolor='#E2E8F0', borderwidth=1)
+        )
+        
+        return fig
 
 
 if __name__ == "__main__":

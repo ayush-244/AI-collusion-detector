@@ -5,6 +5,15 @@ End-to-end pipeline for AI-based peer behavior similarity detection
 
 import os
 import sys
+
+# Reconfigure stdout/stderr to UTF-8 to prevent UnicodeEncodeError on Windows terminals
+if sys.platform.startswith('win'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import yaml
 import pandas as pd
 from datetime import datetime

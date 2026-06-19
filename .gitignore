@@ -32,3 +32,8 @@ icon_cache/
 # IDEs
 .vscode/
 .idea/
+
+# Generated directories
+data/
+outputs/
+*.log
