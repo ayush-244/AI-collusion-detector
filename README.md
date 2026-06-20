@@ -247,7 +247,7 @@ Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
 
 <div align="center">
 
-Built with ❤️ for **educational integrity monitoring**
+Built for **educational integrity monitoring**
 
 [🌐 Live App](https://ai-collusion-detector.onrender.com) · [⭐ Star this repo](https://github.com/ayush-244/AI-collusion-detector) · [🐛 Report an Issue](https://github.com/ayush-244/AI-collusion-detector/issues)
 
