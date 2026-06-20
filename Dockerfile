@@ -1,10 +1,8 @@
-FROM python:3.14-slim
+FROM python:3.12-slim
 
-# Install system dependencies required by Pillow (fonts, libjpeg, etc.)
+# Install minimal system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libjpeg62-turbo-dev \
-    zlib1g-dev \
+    gcc \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -16,4 +14,4 @@ COPY . .
 
 EXPOSE 8501
 
-CMD ["sh","-c","streamlit run app.py --server.headless true --server.port $PORT"]
+CMD ["sh","-c","streamlit run app.py --server.headless true --server.port ${PORT:-8501}"]
